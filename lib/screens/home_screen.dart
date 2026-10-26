@@ -198,9 +198,13 @@ class HomeScreen extends StatelessWidget {
             },
             child: Scaffold(
               appBar: AppBar(
-                title: const Text(
-                  "Let's edit something",
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+                title: const FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    "Let's edit something",
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+                  ),
                 ),
                 centerTitle: false,
               ),
@@ -290,8 +294,8 @@ class _HeroCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                width: 52,
-                height: 52,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
                   color: colorScheme.primary,
                   shape: BoxShape.circle,
@@ -299,24 +303,29 @@ class _HeroCard extends StatelessWidget {
                 child: const Icon(
                   Icons.auto_fix_high_rounded,
                   color: Colors.white,
-                  size: 28,
+                  size: 26,
                 ),
               ),
-              Transform.rotate(
-                angle: -0.06,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary.withAlpha(50),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: colorScheme.primary.withAlpha(80)),
-                  ),
-                  child: Text(
-                    'On-Device Fast',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: colorScheme.primary,
+              const SizedBox(width: 8),
+              Flexible(
+                child: Transform.rotate(
+                  angle: -0.06,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: colorScheme.primary.withAlpha(50),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: colorScheme.primary.withAlpha(80)),
+                    ),
+                    child: Text(
+                      'On-Device Fast',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: colorScheme.primary,
+                      ),
                     ),
                   ),
                 ),
@@ -565,24 +574,30 @@ class _TipCardSection extends StatelessWidget {
         if (state is TipsFailure) {
           return Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color: Colors.white10,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
               children: [
-                const Icon(Icons.info_outline, size: 20, color: Colors.white60),
-                const SizedBox(width: 10),
+                const Icon(Icons.info_outline, size: 18, color: Colors.white60),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     state.message,
-                    style: const TextStyle(fontSize: 13, color: Colors.white70),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, color: Colors.white70),
                   ),
                 ),
                 TextButton(
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: const Size(48, 36),
+                  ),
                   onPressed: () => context.read<TipsCubit>().loadTip(),
-                  child: const Text('Retry', style: TextStyle(fontWeight: FontWeight.w700)),
+                  child: const Text('Retry', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
                 ),
               ],
             ),

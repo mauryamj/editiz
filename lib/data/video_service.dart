@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
+import 'package:ffmpeg_kit_flutter_new/session.dart';
 import 'package:editiz/models/app_exception.dart';
 import 'package:editiz/models/edit_state.dart';
 
@@ -60,11 +62,14 @@ class VideoService {
     );
 
     var hasNoSpaceError = false;
+    final completer = Completer<Session>();
 
     final session = await FFmpegKit.executeAsync(
       command,
-      (session) async {
-        // Complete callback
+      (completedSession) {
+        if (!completer.isCompleted) {
+          completer.complete(completedSession);
+        }
       },
       (log) {
         if (log.getMessage().toLowerCase().contains('no space left')) {
@@ -85,7 +90,8 @@ class VideoService {
       onSessionCreated(sessionId);
     }
 
-    final returnCode = await session.getReturnCode();
+    final completedSession = await completer.future;
+    final returnCode = await completedSession.getReturnCode();
 
     if (ReturnCode.isSuccess(returnCode)) {
       onProgress(1.0);

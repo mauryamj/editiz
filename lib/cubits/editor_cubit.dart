@@ -183,7 +183,7 @@ class EditorCubit extends Cubit<EditorState> {
     }
   }
 
-  // Method: rotates video 90 degrees clockwise (0 -> 1 -> 2 -> 3 -> 0).
+  // Method: rotates video 90 degrees clockwise (Right: 0 -> 1 -> 2 -> 3 -> 0).
   void rotateClockwise() {
     final state = this.state;
     if (state is! EditorReady) return;
@@ -191,6 +191,27 @@ class EditorCubit extends Cubit<EditorState> {
     final newQuarterTurns = (state.editState.quarterTurns + 1) % 4;
     emit(state.copyWith(
       editState: state.editState.copyWith(quarterTurns: newQuarterTurns),
+    ));
+  }
+
+  // Method: rotates video 90 degrees counter-clockwise (Left: 0 -> 3 -> 2 -> 1 -> 0).
+  void rotateCounterClockwise() {
+    final state = this.state;
+    if (state is! EditorReady) return;
+
+    final newQuarterTurns = (state.editState.quarterTurns + 3) % 4;
+    emit(state.copyWith(
+      editState: state.editState.copyWith(quarterTurns: newQuarterTurns),
+    ));
+  }
+
+  // Method: resets only rotation to 0°.
+  void resetRotation() {
+    final state = this.state;
+    if (state is! EditorReady) return;
+
+    emit(state.copyWith(
+      editState: state.editState.copyWith(quarterTurns: 0),
     ));
   }
 

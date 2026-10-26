@@ -28,8 +28,8 @@ class _EditorScreenState extends State<EditorScreen> with WidgetsBindingObserver
   // Field: active editor cubit reference.
   late final EditorCubit _editorCubit;
 
-  // Field: selected edit tab (0 = Rotate, 1 = Filters, 2 = Audio).
-  int _selectedTabIndex = 0;
+  // Field: selected edit tab (0 = Trim, 1 = Rotate, 2 = Filters, 3 = Audio).
+  int _selectedTabIndex = 1; // Default to Rotate as in Stitch reference
 
   // Override: attaches observer and initializes cubit.
   @override
@@ -73,21 +73,110 @@ class _EditorScreenState extends State<EditorScreen> with WidgetsBindingObserver
     ]);
   }
 
+  // Method: triggers export and opens the progress modal sheet.
+  void _saveVideo(BuildContext context, EditState editState) {
+    if (!editState.isValid) return;
+    _editorCubit.pause();
+    final exportCubit = ExportCubit(
+      videoService: context.read<VideoService>(),
+      fileService: context.read<FileService>(),
+      creationsRepository: context.read<CreationsRepository>(),
+    );
+    exportCubit.startExport(
+      inputPath: widget.videoPath,
+      editState: editState.copyWith(),
+    );
+    ExportSheet.show(
+      context,
+      inputPath: widget.videoPath,
+      editState: editState.copyWith(),
+      exportCubit: exportCubit,
+    );
+  }
+
   // Override: builds the responsive editor screen.
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final fileName = widget.videoPath.split(RegExp(r'[\\/]')).last;
+
     return BlocProvider.value(
       value: _editorCubit,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Edit Video', style: TextStyle(fontWeight: FontWeight.w800)),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          centerTitle: true,
+          title: BlocBuilder<EditorCubit, EditorState>(
+            builder: (context, state) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    fileName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if (state is EditorReady)
+                    Text(
+                      formatDuration(state.editState.total),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
           actions: [
             BlocBuilder<EditorCubit, EditorState>(
               builder: (context, state) {
-                if (state is EditorReady && state.editState.hasEdits) {
-                  return TextButton(
-                    onPressed: () => _editorCubit.resetAll(),
-                    child: const Text('Reset All', style: TextStyle(fontWeight: FontWeight.w700)),
+                if (state is EditorReady) {
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.restart_alt_rounded),
+                        tooltip: 'Reset all',
+                        onPressed: state.editState.hasEdits
+                            ? () => _editorCubit.resetAll()
+                            : null,
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 12.0),
+                        child: FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFFFF7A59),
+                            foregroundColor: Colors.white,
+                            shape: const StadiumBorder(),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 0,
+                            ),
+                            minimumSize: const Size(0, 36),
+                          ),
+                          icon: const Icon(Icons.download_rounded, size: 16),
+                          label: const Text(
+                            'Save',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
+                          ),
+                          onPressed: state.editState.isValid
+                              ? () => _saveVideo(context, state.editState)
+                              : null,
+                        ),
+                      ),
+                    ],
                   );
                 }
                 return const SizedBox.shrink();
@@ -149,7 +238,7 @@ class _EditorScreenState extends State<EditorScreen> with WidgetsBindingObserver
     );
   }
 
-  // Method: builds scrollable editor layout ensuring no overflow on small screens.
+  // Method: builds scrollable editor layout matching Stitch design.
   Widget _buildEditorContent(BuildContext context, EditorReady state) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -167,7 +256,7 @@ class _EditorScreenState extends State<EditorScreen> with WidgetsBindingObserver
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Video Preview Container
+                  // Video Preview Container with Stitch Overlays
                   Center(
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(28),
@@ -177,6 +266,13 @@ class _EditorScreenState extends State<EditorScreen> with WidgetsBindingObserver
                           color: Colors.black,
                           borderRadius: BorderRadius.circular(28),
                           border: Border.all(color: Colors.white12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withAlpha(80),
+                              blurRadius: 20,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
                         ),
                         child: AspectRatio(
                           aspectRatio: controller.value.aspectRatio > 0
@@ -192,30 +288,10 @@ class _EditorScreenState extends State<EditorScreen> with WidgetsBindingObserver
                                   child: VideoPlayer(controller),
                                 ),
                               ),
-                              // Play/Pause Overlay Button
-                              GestureDetector(
-                                onTap: () => _editorCubit.togglePlayPause(),
-                                child: Container(
-                                  width: 60,
-                                  height: 60,
-                                  decoration: BoxDecoration(
-                                    color: Colors.black45,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white24, width: 1.5),
-                                  ),
-                                  child: Icon(
-                                    state.isPlaying
-                                        ? Icons.pause_rounded
-                                        : Icons.play_arrow_rounded,
-                                    color: Colors.white,
-                                    size: 36,
-                                  ),
-                                ),
-                              ),
-                              // Audio Muted Indicator Badge
+                              // Audio Muted Indicator Badge (Bottom Left)
                               if (editState.isMuted)
                                 Positioned(
-                                  top: 12,
+                                  bottom: 12,
                                   left: 12,
                                   child: Container(
                                     padding: const EdgeInsets.all(6),
@@ -230,114 +306,252 @@ class _EditorScreenState extends State<EditorScreen> with WidgetsBindingObserver
                                     ),
                                   ),
                                 ),
+                              // Center Play/Pause Glass Button
+                              GestureDetector(
+                                onTap: () => _editorCubit.togglePlayPause(),
+                                child: Container(
+                                  width: 56,
+                                  height: 56,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withAlpha(210),
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withAlpha(80),
+                                        blurRadius: 16,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Icon(
+                                    state.isPlaying
+                                        ? Icons.pause_rounded
+                                        : Icons.play_arrow_rounded,
+                                    color: colorScheme.primary,
+                                    size: 34,
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
-
-                  // Seek Slider + Timestamps
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        formatDuration(state.position),
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                      ),
-                      Text(
-                        formatDuration(editState.total),
-                        style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant),
-                      ),
-                    ],
-                  ),
-                  SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 4,
-                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-                    ),
-                    child: Slider(
-                      value: state.position.inMilliseconds
-                          .clamp(
-                            editState.start.inMilliseconds,
-                            editState.end.inMilliseconds,
-                          )
-                          .toDouble(),
-                      min: editState.start.inMilliseconds.toDouble(),
-                      max: editState.end.inMilliseconds.toDouble(),
-                      onChanged: (val) {
-                        _editorCubit.seekTo(Duration(milliseconds: val.toInt()));
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Trim Controls
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Trim Video',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-                      ),
-                      Text(
-                        'Selected: ${formatDuration(editState.selectedDuration)}',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: editState.isValid ? colorScheme.primary : colorScheme.error,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  RangeSlider(
-                    values: RangeValues(
-                      editState.start.inMilliseconds.toDouble(),
-                      editState.end.inMilliseconds.toDouble(),
-                    ),
-                    min: 0.0,
-                    max: editState.total.inMilliseconds.toDouble(),
-                    activeColor: editState.isValid ? colorScheme.primary : colorScheme.error,
-                    onChanged: (values) {
-                      _editorCubit.updateTrimRange(
-                        Duration(milliseconds: values.start.toInt()),
-                        Duration(milliseconds: values.end.toInt()),
-                      );
-                    },
-                  ),
-                  if (!editState.isValid)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 4.0),
-                      child: Text(
-                        'Minimum trim duration is 1 second',
-                        style: TextStyle(fontSize: 12, color: colorScheme.error),
-                      ),
-                    ),
                   const SizedBox(height: 16),
 
-                  // Tab Selection Chips: Rotate, Filters, Audio
-                  Row(
-                    children: [
-                      ChoiceChip(
-                        label: const Text('Rotate'),
-                        selected: _selectedTabIndex == 0,
-                        onSelected: (val) => setState(() => _selectedTabIndex = 0),
-                      ),
-                      const SizedBox(width: 8),
-                      ChoiceChip(
-                        label: const Text('Filters'),
-                        selected: _selectedTabIndex == 1,
-                        onSelected: (val) => setState(() => _selectedTabIndex = 1),
-                      ),
-                      const SizedBox(width: 8),
-                      ChoiceChip(
-                        label: const Text('Audio'),
-                        selected: _selectedTabIndex == 2,
-                        onSelected: (val) => setState(() => _selectedTabIndex = 2),
-                      ),
-                    ],
+                  // Unified Timeline Scrubbing Card
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surfaceContainerHighest.withAlpha(60),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header info
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.movie_creation_outlined,
+                                  size: 18,
+                                  color: colorScheme.primary,
+                                ),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'Timeline',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.primaryContainer
+                                        .withAlpha(60),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    'Trim ${formatDuration(editState.selectedDuration)}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: editState.isValid
+                                          ? colorScheme.primary
+                                          : colorScheme.error,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Total ${formatDuration(editState.total)}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        // Trim RangeSlider
+                        RangeSlider(
+                          values: RangeValues(
+                            editState.start.inMilliseconds.toDouble(),
+                            editState.end.inMilliseconds.toDouble(),
+                          ),
+                          min: 0.0,
+                          max: editState.total.inMilliseconds.toDouble(),
+                          activeColor: editState.isValid
+                              ? colorScheme.primary
+                              : colorScheme.error,
+                          onChanged: (values) {
+                            _editorCubit.updateTrimRange(
+                              Duration(milliseconds: values.start.toInt()),
+                              Duration(milliseconds: values.end.toInt()),
+                            );
+                          },
+                        ),
+                        // Seek Scrubber Slider
+                        SliderTheme(
+                          data: SliderTheme.of(context).copyWith(
+                            trackHeight: 3,
+                            thumbShape: const RoundSliderThumbShape(
+                              enabledThumbRadius: 6,
+                            ),
+                          ),
+                          child: Slider(
+                            value: state.position.inMilliseconds
+                                .clamp(
+                                  editState.start.inMilliseconds,
+                                  editState.end.inMilliseconds,
+                                )
+                                .toDouble(),
+                            min: editState.start.inMilliseconds.toDouble(),
+                            max: editState.end.inMilliseconds.toDouble(),
+                            onChanged: (val) {
+                              _editorCubit.seekTo(
+                                Duration(milliseconds: val.toInt()),
+                              );
+                            },
+                          ),
+                        ),
+                        // Time readouts: In, Current, Out
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '${formatDuration(editState.start)} (In)',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: colorScheme.primary,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: colorScheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                '${formatDuration(state.position)} (Current)',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              '${formatDuration(editState.end)} (Out)',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (!editState.isValid) ...[
+                          const SizedBox(height: 8),
+                          Center(
+                            child: Text(
+                              'Minimum trim duration is 1 second',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: colorScheme.error,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Thumb-Zone Tool Category Tabs
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        ChoiceChip(
+                          avatar: const Icon(
+                            Icons.content_cut_rounded,
+                            size: 16,
+                          ),
+                          label: const Text('Trim'),
+                          selected: _selectedTabIndex == 0,
+                          onSelected: (val) =>
+                              setState(() => _selectedTabIndex = 0),
+                        ),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          avatar: const Icon(
+                            Icons.rotate_right_rounded,
+                            size: 18,
+                          ),
+                          label: const Text('Rotate'),
+                          selected: _selectedTabIndex == 1,
+                          onSelected: (val) =>
+                              setState(() => _selectedTabIndex = 1),
+                        ),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          avatar: const Icon(
+                            Icons.auto_awesome_rounded,
+                            size: 16,
+                          ),
+                          label: const Text('Filters'),
+                          selected: _selectedTabIndex == 2,
+                          onSelected: (val) =>
+                              setState(() => _selectedTabIndex = 2),
+                        ),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          avatar: const Icon(Icons.volume_up_rounded, size: 16),
+                          label: const Text('Audio'),
+                          selected: _selectedTabIndex == 3,
+                          onSelected: (val) =>
+                              setState(() => _selectedTabIndex = 3),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 12),
 
@@ -350,16 +564,29 @@ class _EditorScreenState extends State<EditorScreen> with WidgetsBindingObserver
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerHighest.withAlpha(60),
+                      color: colorScheme.surfaceContainerHighest.withAlpha(50),
                       borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white10),
                     ),
-                    child: Text(
-                      'Edits: ${editState.editsSummary}',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.tune_rounded,
+                          size: 16,
+                          color: colorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            editState.editsSummary,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -368,103 +595,229 @@ class _EditorScreenState extends State<EditorScreen> with WidgetsBindingObserver
             ),
           ),
 
-          // Save Button Container at bottom (Save Coral: #FF7A59)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
-            child: SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF7A59),
-                  foregroundColor: Colors.white,
-                  shape: const StadiumBorder(),
-                ),
-                onPressed: editState.isValid
-                    ? () {
-                        _editorCubit.pause();
-                        final exportCubit = ExportCubit(
-                          videoService: context.read<VideoService>(),
-                          fileService: context.read<FileService>(),
-                          creationsRepository: context.read<CreationsRepository>(),
-                        );
-                        // Start export with independent copy of edits
-                        exportCubit.startExport(
-                          inputPath: widget.videoPath,
-                          editState: editState.copyWith(),
-                        );
-                        ExportSheet.show(
-                          context,
-                          inputPath: widget.videoPath,
-                          editState: editState.copyWith(),
-                          exportCubit: exportCubit,
-                        );
-                      }
-                    : null,
-                child: const Text(
-                  'Save Video',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                ),
-              ),
-            ),
-          ),
+         
         ],
       ),
     );
   }
 
-  // Method: builds tool panel for Rotate, Filters, or Audio.
+  // Method: builds tool panel for Trim, Rotate, Filters, or Audio.
   Widget _buildToolPanel(BuildContext context, EditState editState) {
     final colorScheme = Theme.of(context).colorScheme;
 
     if (_selectedTabIndex == 0) {
-      // Rotate Panel
+      // Trim Panel with quick adjustment hints
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHighest.withAlpha(50),
           borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white10),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Rotate 90°',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                const Row(
+                  children: [
+                    Icon(Icons.content_cut_rounded, size: 18),
+                    SizedBox(width: 8),
+                    Text(
+                      'Trim Controls',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 2),
                 Text(
-                  'Current: ${editState.quarterTurns * 90}°',
-                  style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant),
+                  formatDuration(editState.selectedDuration),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: colorScheme.primary,
+                  ),
                 ),
               ],
             ),
-            FilledButton.tonalIcon(
-              onPressed: () => _editorCubit.rotateClockwise(),
-              icon: const Icon(Icons.rotate_right_rounded),
-              label: const Text('Rotate'),
+            const SizedBox(height: 10),
+            Text(
+              'Drag the handles in the timeline above to trim your clip.',
+              style: TextStyle(
+                fontSize: 13,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      shape: const StadiumBorder(),
+                    ),
+                    onPressed: () {
+                      final half = Duration(
+                        milliseconds: editState.total.inMilliseconds ~/ 2,
+                      );
+                      _editorCubit.updateTrimRange(Duration.zero, half);
+                    },
+                    child: const Text('First Half'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      shape: const StadiumBorder(),
+                    ),
+                    onPressed: () {
+                      _editorCubit.updateTrimRange(
+                        Duration.zero,
+                        editState.total,
+                      );
+                    },
+                    child: const Text('Reset Trim'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
       );
     } else if (_selectedTabIndex == 1) {
-      // Filters Panel (Brightness & Contrast)
+      // Rotate Panel (Rotate Left, Rotate Right, Reset Rotation per Stitch reference)
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHighest.withAlpha(50),
           borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white10),
         ),
         child: Column(
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Brightness', style: TextStyle(fontWeight: FontWeight.w600)),
-                Text('${(editState.brightness * 100).toInt()}%'),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.screen_rotation_rounded,
+                      size: 18,
+                      color: colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Orientation & Transform',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer.withAlpha(60),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '${editState.quarterTurns * 90}° Step',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: colorScheme.primary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      shape: const StadiumBorder(),
+                    ),
+                    onPressed: () => _editorCubit.rotateCounterClockwise(),
+                    icon: const Icon(Icons.rotate_left_rounded, size: 20),
+                    label: const Text(
+                      '-90° Left',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      shape: const StadiumBorder(),
+                    ),
+                    onPressed: () => _editorCubit.rotateClockwise(),
+                    icon: const Icon(Icons.rotate_right_rounded, size: 20),
+                    label: const Text(
+                      '+90° Right',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      shape: const StadiumBorder(),
+                    ),
+                    onPressed: () => _editorCubit.resetRotation(),
+                    icon: const Icon(Icons.restart_alt_rounded, size: 18),
+                    label: const Text(
+                      'Reset',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    } else if (_selectedTabIndex == 2) {
+      // Filters Panel (Brightness & Contrast)
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest.withAlpha(50),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white10),
+        ),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.light_mode_outlined, size: 18),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Brightness',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+                Text(
+                  '${editState.brightness >= 0 ? '+' : ''}${(editState.brightness * 100).toInt()}%',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: colorScheme.primary,
+                  ),
+                ),
               ],
             ),
             Slider(
@@ -477,8 +830,23 @@ class _EditorScreenState extends State<EditorScreen> with WidgetsBindingObserver
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Contrast', style: TextStyle(fontWeight: FontWeight.w600)),
-                Text('${editState.contrast.toStringAsFixed(1)}x'),
+                Row(
+                  children: [
+                    const Icon(Icons.contrast_rounded, size: 18),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Contrast',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+                Text(
+                  '${editState.contrast.toStringAsFixed(1)}x',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: colorScheme.primary,
+                  ),
+                ),
               ],
             ),
             Slider(
@@ -504,18 +872,39 @@ class _EditorScreenState extends State<EditorScreen> with WidgetsBindingObserver
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerHighest.withAlpha(50),
           borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white10),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            Row(
               children: [
-                const Text('Audio Track', style: TextStyle(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 2),
-                Text(
-                  editState.isMuted ? 'Audio stripped (Muted)' : 'Original audio enabled',
-                  style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant),
+                Icon(
+                  editState.isMuted
+                      ? Icons.volume_off_rounded
+                      : Icons.volume_up_rounded,
+                  size: 24,
+                  color: colorScheme.primary,
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Audio Track',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      editState.isMuted
+                          ? 'Audio stripped (Muted)'
+                          : 'Original audio enabled',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

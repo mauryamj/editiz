@@ -72,21 +72,23 @@ class FileService {
 
   // Method: generates a video thumbnail using FFmpeg.
   Future<String> generateThumbnail(String videoPath, int id) async {
-    final outPath = await createThumbnailPath(id);
-    final command =
-        '-y -ss 00:00:00.500 -i "$videoPath" -vframes 1 -vf "scale=480:-1" "$outPath"';
-    final session = await FFmpegKit.execute(command);
-    final returnCode = await session.getReturnCode();
-    if (ReturnCode.isSuccess(returnCode)) {
-      return outPath;
-    }
-    // Fallback: extract at 0s if 0.5s failed.
-    final fallbackCmd =
-        '-y -ss 00:00:00 -i "$videoPath" -vframes 1 -vf "scale=480:-1" "$outPath"';
-    final fallbackSession = await FFmpegKit.execute(fallbackCmd);
-    if (ReturnCode.isSuccess(await fallbackSession.getReturnCode())) {
-      return outPath;
-    }
+    try {
+      final outPath = await createThumbnailPath(id);
+      final command =
+          '-y -ss 00:00:00.500 -i "$videoPath" -vframes 1 -vf "scale=480:-1" "$outPath"';
+      final session = await FFmpegKit.execute(command);
+      final returnCode = await session.getReturnCode();
+      if (ReturnCode.isSuccess(returnCode)) {
+        return outPath;
+      }
+      // Fallback: extract at 0s if 0.5s failed.
+      final fallbackCmd =
+          '-y -ss 00:00:00 -i "$videoPath" -vframes 1 -vf "scale=480:-1" "$outPath"';
+      final fallbackSession = await FFmpegKit.execute(fallbackCmd);
+      if (ReturnCode.isSuccess(await fallbackSession.getReturnCode())) {
+        return outPath;
+      }
+    } catch (_) {}
     return '';
   }
 
