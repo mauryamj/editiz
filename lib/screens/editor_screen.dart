@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:video_player/video_player.dart';
 import 'package:editiz/cubits/editor_cubit.dart';
+import 'package:editiz/cubits/export_cubit.dart';
+import 'package:editiz/data/file_service.dart';
+import 'package:editiz/data/video_service.dart';
 import 'package:editiz/models/edit_state.dart';
+import 'package:editiz/repositories/creations_repository.dart';
+import 'package:editiz/screens/export_sheet.dart';
 import 'package:editiz/widgets/expressive_loader.dart';
 
 // Class: editor screen handling video preview, trim slider, rotate, filters, and audio adjustments.
@@ -377,9 +382,22 @@ class _EditorScreenState extends State<EditorScreen> with WidgetsBindingObserver
                 ),
                 onPressed: editState.isValid
                     ? () {
-                        // Will trigger ExportSheet in Phase 6.
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Export workflow begins in Phase 6')),
+                        _editorCubit.pause();
+                        final exportCubit = ExportCubit(
+                          videoService: context.read<VideoService>(),
+                          fileService: context.read<FileService>(),
+                          creationsRepository: context.read<CreationsRepository>(),
+                        );
+                        // Start export with independent copy of edits
+                        exportCubit.startExport(
+                          inputPath: widget.videoPath,
+                          editState: editState.copyWith(),
+                        );
+                        ExportSheet.show(
+                          context,
+                          inputPath: widget.videoPath,
+                          editState: editState.copyWith(),
+                          exportCubit: exportCubit,
                         );
                       }
                     : null,

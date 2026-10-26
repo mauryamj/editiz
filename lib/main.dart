@@ -4,6 +4,7 @@ import 'package:editiz/data/creations_local_source.dart';
 import 'package:editiz/data/file_service.dart';
 import 'package:editiz/data/permission_service.dart';
 import 'package:editiz/data/tips_remote_source.dart';
+import 'package:editiz/data/video_service.dart';
 import 'package:editiz/repositories/creations_repository.dart';
 import 'package:editiz/repositories/tips_repository.dart';
 import 'package:editiz/cubits/creations_cubit.dart';
@@ -27,6 +28,7 @@ class EditizApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final fileService = FileService();
     final permissionService = PermissionService();
+    final videoService = VideoService();
     final creationsLocalSource = CreationsLocalSource();
     final tipsRemoteSource = TipsRemoteSource();
 
@@ -42,6 +44,7 @@ class EditizApp extends StatelessWidget {
       providers: [
         RepositoryProvider<FileService>.value(value: fileService),
         RepositoryProvider<PermissionService>.value(value: permissionService),
+        RepositoryProvider<VideoService>.value(value: videoService),
         RepositoryProvider<CreationsRepository>.value(value: creationsRepository),
         RepositoryProvider<TipsRepository>.value(value: tipsRepository),
       ],
