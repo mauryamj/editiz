@@ -58,13 +58,14 @@ class FileService {
     return xFile.path;
   }
 
-  // Method: picks a video file using the system file picker.
+  // Method: picks a video file using the system file picker (document/file browser).
   Future<String?> pickVideoFromFileSystem() async {
-    final files = await FilePicker.pickFiles(
-      type: FileType.video,
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['mp4', 'mov', 'mkv', 'webm', '3gp'],
     );
-    if (files.isEmpty) return null;
-    final path = files.first.path;
+    if (result.isEmpty) return null;
+    final path = result.first.path;
     if (path == null) return null;
     validateVideoPath(path);
     return path;
